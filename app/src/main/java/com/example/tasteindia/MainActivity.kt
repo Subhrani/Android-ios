@@ -62,6 +62,7 @@ fun RecipesRoute(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
+    val ascending by viewModel.ascending.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     RecipesScreen(
@@ -69,6 +70,10 @@ fun RecipesRoute(
         searchQuery = searchQuery,
         onSearchQueryChange = { query ->
             viewModel.updateSearchQuery(query)
+        },
+        ascending = ascending,
+        onSortChange = { value ->
+            viewModel.setAscending(value)
         },
         onRetry = { viewModel.loadRecipes() },
         onLoadSample = { viewModel.loadSampleRecipes(context) },
@@ -81,13 +86,13 @@ fun RecipesScreen(
     uiState: RecipesUiState,
     searchQuery: String,
     onSearchQueryChange: (String) -> Unit,
+    ascending: Boolean,
+    onSortChange: (Boolean) -> Unit,
     onRetry: () -> Unit,
     onLoadSample: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Column(
-        modifier = modifier.fillMaxSize()
-    ) {
+    Column(modifier = modifier.fillMaxSize()) {
         Text(
             text = "TasteIndia",
             style = MaterialTheme.typography.headlineMedium,
@@ -112,11 +117,17 @@ fun RecipesScreen(
             }
 
             is RecipesUiState.Success -> {
-                val filteredMeals = uiState.meals.filter { meal ->
+                val matchingMeals = uiState.meals.filter { meal ->
                     meal.name.contains(
                         other = searchQuery.trim(),
                         ignoreCase = true
                     )
+                }
+
+                val filteredMeals = if (ascending) {
+                    matchingMeals.sortedBy { it.name.lowercase() }
+                } else {
+                    matchingMeals.sortedByDescending { it.name.lowercase() }
                 }
 
                 if (uiState.isSample) {
@@ -144,6 +155,15 @@ fun RecipesScreen(
                     ) {
                         Text(text = "Clear search")
                     }
+                }
+
+                Button(
+                    onClick = { onSortChange(!ascending) },
+                    modifier = Modifier.padding(start = 16.dp)
+                ) {
+                    Text(
+                        text = if (ascending) "Sort: A–Z" else "Sort: Z–A"
+                    )
                 }
 
                 Text(
@@ -237,6 +257,8 @@ fun RecipesScreenPreview() {
             ),
             searchQuery = "",
             onSearchQueryChange = {},
+            ascending = true,
+            onSortChange = {},
             onRetry = {},
             onLoadSample = {}
         )

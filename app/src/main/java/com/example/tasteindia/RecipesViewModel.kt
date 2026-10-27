@@ -42,6 +42,13 @@ class RecipesViewModel(
     private val _searchQuery = MutableStateFlow("")
 
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
+    private val _ascending = MutableStateFlow(true)
+
+    val ascending: StateFlow<Boolean> = _ascending.asStateFlow()
+
+    fun setAscending(value: Boolean) {
+        _ascending.value = value
+    }
 
     private var loadJob: Job? = null
 
