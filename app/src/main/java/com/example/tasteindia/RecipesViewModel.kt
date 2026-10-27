@@ -1,20 +1,26 @@
 package com.example.tasteindia
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.squareup.moshi.Moshi
+import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
+import java.io.IOException
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import java.io.IOException
+import kotlinx.coroutines.withContext
 
 // The possible states of the recipe list.
 sealed interface RecipesUiState {
     data object Loading : RecipesUiState
 
     data class Success(
-        val meals: List<Meal>
+        val meals: List<Meal>,
+        val isSample: Boolean = false
     ) : RecipesUiState
 
     data object Empty : RecipesUiState
@@ -37,6 +43,7 @@ class RecipesViewModel(
         loadRecipes()
     }
 
+    // Load the real Indian meal list from TheMealDB.
     fun loadRecipes() {
         viewModelScope.launch {
             _uiState.value = RecipesUiState.Loading
@@ -74,7 +81,6 @@ class RecipesViewModel(
                     RecipesUiState.Success(meals)
                 }
             } catch (exception: CancellationException) {
-                // Let the coroutine cancel normally.
                 throw exception
             } catch (exception: IOException) {
                 _uiState.value = RecipesUiState.Error(
@@ -83,6 +89,52 @@ class RecipesViewModel(
             } catch (exception: Exception) {
                 _uiState.value = RecipesUiState.Error(
                     "Could not load recipes. Please try again."
+                )
+            }
+        }
+    }
+
+    // Load the saved sample JSON for offline review.
+    fun loadSampleRecipes(context: Context) {
+        val appContext = context.applicationContext
+
+        viewModelScope.launch {
+            _uiState.value = RecipesUiState.Loading
+
+            try {
+                val meals = withContext(Dispatchers.IO) {
+                    val json = appContext.assets
+                        .open("indian_meals.json")
+                        .bufferedReader()
+                        .use { it.readText() }
+
+                    val moshi = Moshi.Builder()
+                        .addLast(KotlinJsonAdapterFactory())
+                        .build()
+
+                    val response = requireNotNull(
+                        moshi.adapter(MealsResponse::class.java)
+                            .fromJson(json)
+                    )
+
+                    response.meals.orEmpty().map { mealDto ->
+                        Meal(
+                            id = mealDto.idMeal,
+                            name = mealDto.strMeal,
+                            imageUrl = mealDto.strMealThumb.orEmpty()
+                        )
+                    }
+                }
+
+                _uiState.value = RecipesUiState.Success(
+                    meals = meals,
+                    isSample = true
+                )
+            } catch (exception: CancellationException) {
+                throw exception
+            } catch (exception: Exception) {
+                _uiState.value = RecipesUiState.Error(
+                    "Could not load the sample data."
                 )
             }
         }

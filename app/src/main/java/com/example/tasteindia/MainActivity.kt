@@ -24,6 +24,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 
@@ -64,10 +65,12 @@ fun RecipesRoute(
     viewModel: RecipesViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
 
     RecipesScreen(
         uiState = uiState,
         onRetry = { viewModel.loadRecipes() },
+        onLoadSample = { viewModel.loadSampleRecipes(context) },
         modifier = modifier
     )
 }
@@ -76,6 +79,7 @@ fun RecipesRoute(
 fun RecipesScreen(
     uiState: RecipesUiState,
     onRetry: () -> Unit,
+    onLoadSample: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -96,6 +100,7 @@ fun RecipesScreen(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     CircularProgressIndicator()
+
                     Text(
                         text = "Loading recipes...",
                         modifier = Modifier.padding(top = 16.dp)
@@ -104,9 +109,20 @@ fun RecipesScreen(
             }
 
             is RecipesUiState.Success -> {
+                if (uiState.isSample) {
+                    Text(
+                        text = "Sample data — offline review",
+                        style = MaterialTheme.typography.labelLarge,
+                        modifier = Modifier.padding(horizontal = 16.dp)
+                    )
+                }
+
                 Text(
                     text = "${uiState.meals.size} recipes",
-                    modifier = Modifier.padding(horizontal = 16.dp)
+                    modifier = Modifier.padding(
+                        horizontal = 16.dp,
+                        vertical = 8.dp
+                    )
                 )
 
                 LazyColumn {
@@ -130,14 +146,16 @@ fun RecipesScreen(
             is RecipesUiState.Empty -> {
                 MessageWithRetry(
                     message = "No Indian recipes were returned. Please try again.",
-                    onRetry = onRetry
+                    onRetry = onRetry,
+                    onLoadSample = onLoadSample
                 )
             }
 
             is RecipesUiState.Error -> {
                 MessageWithRetry(
                     message = uiState.message,
-                    onRetry = onRetry
+                    onRetry = onRetry,
+                    onLoadSample = onLoadSample
                 )
             }
         }
@@ -147,7 +165,8 @@ fun RecipesScreen(
 @Composable
 fun MessageWithRetry(
     message: String,
-    onRetry: () -> Unit
+    onRetry: () -> Unit,
+    onLoadSample: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -161,6 +180,10 @@ fun MessageWithRetry(
         Button(onClick = onRetry) {
             Text(text = "Retry")
         }
+
+        Button(onClick = onLoadSample) {
+            Text(text = "Try sample data")
+        }
     }
 }
 
@@ -173,9 +196,11 @@ fun RecipesScreenPreview() {
                 meals = listOf(
                     Meal("1", "Sample Biryani", ""),
                     Meal("2", "Sample Chana Masala", "")
-                )
+                ),
+                isSample = true
             ),
-            onRetry = {}
+            onRetry = {},
+            onLoadSample = {}
         )
     }
 }
