@@ -17,12 +17,44 @@ data class MealDto(
 data class MealsResponse(
     val meals: List<MealDto>?
 )
+data class CategoryDto(
+    val strCategory: String
+)
 
+data class CategoriesResponse(
+    val meals: List<CategoryDto>?
+)
+
+data class IngredientDto(
+    val strIngredient: String
+)
+
+data class IngredientsResponse(
+    val meals: List<IngredientDto>?
+)
 interface MealApi {
     @GET("filter.php")
     suspend fun getMealsByArea(
         @Query("a") area: String
     ): Response<MealsResponse>
+    @GET("filter.php")
+    suspend fun getMealsByCategory(
+        @Query("c") category: String
+    ): Response<MealsResponse>
+
+    @GET("filter.php")
+    suspend fun getMealsByIngredient(
+        @Query("i") ingredient: String
+    ): Response<MealsResponse>
+    @GET("list.php")
+    suspend fun getCategories(
+        @Query("c") list: String = "list"
+    ): Response<CategoriesResponse>
+
+    @GET("list.php")
+    suspend fun getIngredients(
+        @Query("i") list: String = "list"
+    ): Response<IngredientsResponse>
 }
 
 object MealApiClient {
