@@ -48,11 +48,11 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun RecipeList(modifier: Modifier = Modifier) {
     val recipes = listOf(
-        "Biryani",
-        "Butter Chicken",
-        "Chana Masala",
-        "Dosa",
-        "Samosa"
+        Meal(id = "1", name = "Biryani", imageUrl = ""),
+        Meal(id = "2", name = "Butter Chicken", imageUrl = ""),
+        Meal(id = "3", name = "Chana Masala", imageUrl = ""),
+        Meal(id = "4", name = "Dosa", imageUrl = ""),
+        Meal(id = "5", name = "Samosa", imageUrl = "")
     )
 
     Column(modifier = modifier) {
@@ -63,9 +63,12 @@ fun RecipeList(modifier: Modifier = Modifier) {
         )
 
         LazyColumn {
-            items(recipes) { recipe ->
+            items(
+                items = recipes,
+                key = { recipe -> recipe.id }
+            ) { recipe ->
                 Text(
-                    text = recipe,
+                    text = recipe.name,
                     style = MaterialTheme.typography.bodyLarge,
                     modifier = Modifier
                         .fillMaxWidth()
@@ -77,7 +80,11 @@ fun RecipeList(modifier: Modifier = Modifier) {
         }
     }
 }
-
+data class Meal(
+    val id: String,
+    val name: String,
+    val imageUrl: String
+)
 @Preview(showBackground = true)
 @Composable
 fun RecipeListPreview() {
