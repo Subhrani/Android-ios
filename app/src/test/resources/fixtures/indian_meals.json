@@ -1,0 +1,14 @@
+{
+  "meals": [
+    {
+      "idMeal": "test-1",
+      "strMeal": "Sample Biryani",
+      "strMealThumb": null
+    },
+    {
+      "idMeal": "test-2",
+      "strMeal": "Sample Chana Masala",
+      "strMealThumb": "https://example.com/test-image.jpg"
+    }
+  ]
+}
