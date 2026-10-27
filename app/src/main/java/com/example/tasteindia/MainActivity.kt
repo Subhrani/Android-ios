@@ -4,7 +4,6 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -12,14 +11,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -27,10 +25,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-
 import com.example.tasteindia.ui.theme.MyApplicationTheme
 
 class MainActivity : ComponentActivity() {
@@ -65,10 +61,15 @@ fun RecipesRoute(
     viewModel: RecipesViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     RecipesScreen(
         uiState = uiState,
+        searchQuery = searchQuery,
+        onSearchQueryChange = { query ->
+            viewModel.updateSearchQuery(query)
+        },
         onRetry = { viewModel.loadRecipes() },
         onLoadSample = { viewModel.loadSampleRecipes(context) },
         modifier = modifier
@@ -78,6 +79,8 @@ fun RecipesRoute(
 @Composable
 fun RecipesScreen(
     uiState: RecipesUiState,
+    searchQuery: String,
+    onSearchQueryChange: (String) -> Unit,
     onRetry: () -> Unit,
     onLoadSample: () -> Unit,
     modifier: Modifier = Modifier
@@ -109,6 +112,13 @@ fun RecipesScreen(
             }
 
             is RecipesUiState.Success -> {
+                val filteredMeals = uiState.meals.filter { meal ->
+                    meal.name.contains(
+                        other = searchQuery.trim(),
+                        ignoreCase = true
+                    )
+                }
+
                 if (uiState.isSample) {
                     Text(
                         text = "Sample data — offline review",
@@ -117,17 +127,43 @@ fun RecipesScreen(
                     )
                 }
 
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = onSearchQueryChange,
+                    label = { Text("Search recipes") },
+                    singleLine = true,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                )
+
+                if (searchQuery.isNotEmpty()) {
+                    Button(
+                        onClick = { onSearchQueryChange("") },
+                        modifier = Modifier.padding(start = 16.dp)
+                    ) {
+                        Text(text = "Clear search")
+                    }
+                }
+
                 Text(
-                    text = "${uiState.meals.size} recipes",
+                    text = "${filteredMeals.size} recipes",
                     modifier = Modifier.padding(
                         horizontal = 16.dp,
                         vertical = 8.dp
                     )
                 )
 
+                if (filteredMeals.isEmpty()) {
+                    Text(
+                        text = "No recipes match your search.",
+                        modifier = Modifier.padding(16.dp)
+                    )
+                }
+
                 LazyColumn {
                     items(
-                        items = uiState.meals,
+                        items = filteredMeals,
                         key = { meal -> meal.id }
                     ) { meal ->
                         Text(
@@ -199,6 +235,8 @@ fun RecipesScreenPreview() {
                 ),
                 isSample = true
             ),
+            searchQuery = "",
+            onSearchQueryChange = {},
             onRetry = {},
             onLoadSample = {}
         )

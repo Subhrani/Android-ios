@@ -8,13 +8,13 @@ import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import java.io.IOException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-// The possible states of the recipe list.
 sealed interface RecipesUiState {
     data object Loading : RecipesUiState
 
@@ -39,13 +39,25 @@ class RecipesViewModel(
 
     val uiState: StateFlow<RecipesUiState> = _uiState.asStateFlow()
 
+    private val _searchQuery = MutableStateFlow("")
+
+    val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
+
+    private var loadJob: Job? = null
+
     init {
         loadRecipes()
     }
 
+    fun updateSearchQuery(query: String) {
+        _searchQuery.value = query
+    }
+
     // Load the real Indian meal list from TheMealDB.
     fun loadRecipes() {
-        viewModelScope.launch {
+        loadJob?.cancel()
+
+        loadJob = viewModelScope.launch {
             _uiState.value = RecipesUiState.Loading
 
             try {
@@ -98,7 +110,9 @@ class RecipesViewModel(
     fun loadSampleRecipes(context: Context) {
         val appContext = context.applicationContext
 
-        viewModelScope.launch {
+        loadJob?.cancel()
+
+        loadJob = viewModelScope.launch {
             _uiState.value = RecipesUiState.Loading
 
             try {
