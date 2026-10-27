@@ -1,0 +1,38 @@
+{
+  "meals": [
+    {
+      "idMeal": "test-1",
+      "strMeal": "Sample Biryani",
+      "strArea": "Indian",
+      "strCategory": "Chicken",
+      "strMealThumb": null,
+      "strIngredient1": "Rice",
+      "strMeasure1": "1 cup",
+      "strIngredient2": "Chicken",
+      "strMeasure2": "200 g",
+      "strIngredient3": "Spices",
+      "strMeasure3": "To taste",
+      "strInstructions": "Cook the rice.\nCook the chicken with spices.\nCombine and serve.",
+      "strTags": "Sample,Dinner",
+      "strSource": null,
+      "strYoutube": null
+    },
+    {
+      "idMeal": "test-2",
+      "strMeal": "Sample Chana Masala",
+      "strArea": "Indian",
+      "strCategory": "Vegetarian",
+      "strMealThumb": null,
+      "strIngredient1": "Chickpeas",
+      "strMeasure1": "1 cup",
+      "strIngredient2": "Tomato",
+      "strMeasure2": "1",
+      "strIngredient3": "Spices",
+      "strMeasure3": "To taste",
+      "strInstructions": "Cook the chickpeas.\nPrepare the tomato and spice mixture.\nCombine and serve.",
+      "strTags": "Sample,Vegetarian",
+      "strSource": null,
+      "strYoutube": null
+    }
+  ]
+}

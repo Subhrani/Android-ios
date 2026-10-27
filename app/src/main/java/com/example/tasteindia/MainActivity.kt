@@ -4,7 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -13,7 +13,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -24,22 +24,18 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-
 import com.example.tasteindia.ui.theme.MyApplicationTheme
 
 class MainActivity : ComponentActivity() {
@@ -53,7 +49,7 @@ class MainActivity : ComponentActivity() {
                 Scaffold(
                     modifier = Modifier.fillMaxSize()
                 ) { innerPadding ->
-                    RecipesRoute(
+                    AppNavigation(
                         modifier = Modifier.padding(innerPadding)
                     )
                 }
@@ -70,6 +66,7 @@ data class Meal(
 
 @Composable
 fun RecipesRoute(
+    onOpenMeal: (String, Boolean) -> Unit,
     modifier: Modifier = Modifier,
     viewModel: RecipesViewModel = viewModel()
 ) {
@@ -98,6 +95,7 @@ fun RecipesRoute(
         },
         onRetry = viewModel::loadRecipes,
         onLoadSample = { viewModel.loadSampleRecipes(context) },
+        onOpenMeal = onOpenMeal,
         modifier = modifier
     )
 }
@@ -116,11 +114,15 @@ fun RecipesScreen(
     onClearAll: () -> Unit,
     onRetry: () -> Unit,
     onLoadSample: () -> Unit,
+    onOpenMeal: (String, Boolean) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var showFilters by rememberSaveable { mutableStateOf(false) }
     var draftCategory by rememberSaveable { mutableStateOf("") }
     var draftIngredient by rememberSaveable { mutableStateOf("") }
+
+    // Keeps the list's scroll position as saveable screen state.
+    val listState = rememberLazyListState()
 
     Column(modifier = modifier.fillMaxSize()) {
         Text(
@@ -200,6 +202,7 @@ fun RecipesScreen(
                             draftIngredient = filters.ingredient.orEmpty()
                             onLoadFilterChoices()
                         }
+
                         showFilters = !showFilters
                     },
                     modifier = Modifier.padding(horizontal = 16.dp)
@@ -220,6 +223,7 @@ fun RecipesScreen(
                                 draftCategory.takeIf { it.isNotBlank() },
                                 draftIngredient.takeIf { it.isNotBlank() }
                             )
+
                             showFilters = false
                         }
                     )
@@ -281,7 +285,7 @@ fun RecipesScreen(
                     )
                 }
 
-                LazyColumn {
+                LazyColumn(state = listState) {
                     items(
                         items = visibleMeals,
                         key = { meal -> meal.id }
@@ -291,6 +295,9 @@ fun RecipesScreen(
                             style = MaterialTheme.typography.bodyLarge,
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .clickable {
+                                    onOpenMeal(meal.id, uiState.isSample)
+                                }
                                 .padding(16.dp)
                         )
 
@@ -333,7 +340,9 @@ fun FilterControls(
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         when {
-            choices.isLoading -> Text("Loading filter choices...")
+            choices.isLoading -> {
+                Text("Loading filter choices...")
+            }
 
             choices.error != null -> {
                 Text(
@@ -427,11 +436,11 @@ fun MessageWithRetry(
         Text(text = message)
 
         Button(onClick = onRetry) {
-            Text(text = "Retry")
+            Text("Retry")
         }
 
         Button(onClick = onLoadSample) {
-            Text(text = "Try sample data")
+            Text("Try sample data")
         }
     }
 }
@@ -458,7 +467,8 @@ fun RecipesScreenPreview() {
             onApplyFilters = { _, _ -> },
             onClearAll = {},
             onRetry = {},
-            onLoadSample = {}
+            onLoadSample = {},
+            onOpenMeal = { _, _ -> }
         )
     }
 }

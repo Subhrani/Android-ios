@@ -32,6 +32,9 @@ data class IngredientDto(
 data class IngredientsResponse(
     val meals: List<IngredientDto>?
 )
+data class MealDetailsResponse(
+    val meals: List<Map<String, Any?>>?
+)
 interface MealApi {
     @GET("filter.php")
     suspend fun getMealsByArea(
@@ -55,6 +58,10 @@ interface MealApi {
     suspend fun getIngredients(
         @Query("i") list: String = "list"
     ): Response<IngredientsResponse>
+    @GET("lookup.php")
+    suspend fun getMealDetails(
+        @Query("i") mealId: String
+    ): Response<MealDetailsResponse>
 }
 
 object MealApiClient {
