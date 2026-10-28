@@ -3,6 +3,7 @@ package com.example.tasteindia
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
+import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -28,30 +29,60 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 fun MealDetailsRoute(
     mealId: String,
     isSample: Boolean,
+    favouritesState: FavouritesUiState,
+    onSetFavourite: (SavedMeal, Boolean) -> Unit,
     onBack: () -> Unit,
     viewModel: MealDetailsViewModel = viewModel()
 ) {
     val context = LocalContext.current
-    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val networkState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    LaunchedEffect(mealId, isSample) {
-        viewModel.loadDetails(mealId, isSample, context)
+    val savedMeal = favouritesState.meals.firstOrNull {
+        it.id == mealId && it.isSample == isSample
+    }
+
+    val cachedDetails = savedMeal?.details
+
+    LaunchedEffect(
+        mealId,
+        isSample,
+        favouritesState.isLoading,
+        cachedDetails != null
+    ) {
+        if (!favouritesState.isLoading && cachedDetails == null) {
+            viewModel.loadDetails(mealId, isSample, context)
+        }
+    }
+
+    val displayState = when {
+        favouritesState.isLoading -> MealDetailsUiState.Loading
+        cachedDetails != null -> MealDetailsUiState.Success(
+            details = cachedDetails,
+            isSample = isSample
+        )
+        else -> networkState
     }
 
     MealDetailsScreen(
-        uiState = uiState,
+        uiState = displayState,
+        isFavourite = savedMeal != null,
+        favouritesState = favouritesState,
         onBack = onBack,
         onRetry = {
             viewModel.loadDetails(mealId, isSample, context)
-        }
+        },
+        onSetFavourite = onSetFavourite
     )
 }
 
 @Composable
 fun MealDetailsScreen(
     uiState: MealDetailsUiState,
+    isFavourite: Boolean,
+    favouritesState: FavouritesUiState,
     onBack: () -> Unit,
-    onRetry: () -> Unit
+    onRetry: () -> Unit,
+    onSetFavourite: (SavedMeal, Boolean) -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -61,7 +92,14 @@ fun MealDetailsScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         OutlinedButton(onClick = onBack) {
-            Text("Back to recipes")
+            Text("Back")
+        }
+
+        favouritesState.error?.let {
+            Text(
+                text = it,
+                color = MaterialTheme.colorScheme.error
+            )
         }
 
         when (uiState) {
@@ -75,7 +113,6 @@ fun MealDetailsScreen(
                     text = uiState.message,
                     color = MaterialTheme.colorScheme.error
                 )
-
                 Button(onClick = onRetry) {
                     Text("Retry")
                 }
@@ -96,21 +133,61 @@ fun MealDetailsScreen(
                     style = MaterialTheme.typography.headlineMedium
                 )
 
-                if (details.alternateName.isNotBlank()) {
-                    Text("Also known as: ${details.alternateName}")
+                Button(
+                    enabled = !favouritesState.isLoading &&
+                            !favouritesState.isSaving,
+                    onClick = {
+                        onSetFavourite(
+                            SavedMeal(
+                                id = details.id,
+                                name = details.name,
+                                imageUrl = details.imageUrl,
+                                isSample = uiState.isSample,
+                                details = details
+                            ),
+                            !isFavourite
+                        )
+                    }
+                ) {
+                    Text(
+                        if (isFavourite) {
+                            "Remove from favourites"
+                        } else {
+                            "Save to favourites"
+                        }
+                    )
                 }
 
-                if (details.category.isNotBlank()) {
-                    Text("Category: ${details.category}")
+                // A list-saved favourite may initially have only a summary.
+                val storedDetails = favouritesState.meals.firstOrNull {
+                    it.id == details.id &&
+                            it.isSample == uiState.isSample
+                }?.details
+
+                if (isFavourite && storedDetails == null) {
+                    OutlinedButton(
+                        enabled = !favouritesState.isSaving,
+                        onClick = {
+                            onSetFavourite(
+                                SavedMeal(
+                                    id = details.id,
+                                    name = details.name,
+                                    imageUrl = details.imageUrl,
+                                    isSample = uiState.isSample,
+                                    details = details
+                                ),
+                                true
+                            )
+                        }
+                    ) {
+                        Text("Save details for offline use")
+                    }
                 }
 
-                if (details.area.isNotBlank()) {
-                    Text("Area: ${details.area}")
-                }
-
-                if (details.country.isNotBlank()) {
-                    Text("Country: ${details.country}")
-                }
+                DetailField("Also known as", details.alternateName)
+                DetailField("Category", details.category)
+                DetailField("Area", details.area)
+                DetailField("Country", details.country)
 
                 if (details.tags.isNotEmpty()) {
                     Text("Tags: ${details.tags.joinToString(", ")}")
@@ -123,11 +200,11 @@ fun MealDetailsScreen(
                     )
 
                     details.ingredients.forEach { item ->
-                        val row = listOf(item.ingredient, item.measure)
-                            .filter { it.isNotBlank() }
-                            .joinToString(" — ")
-
-                        Text(text = row)
+                        Text(
+                            listOf(item.ingredient, item.measure)
+                                .filter { it.isNotBlank() }
+                                .joinToString(" — ")
+                        )
                     }
                 }
 
@@ -136,37 +213,35 @@ fun MealDetailsScreen(
                         text = "Instructions",
                         style = MaterialTheme.typography.titleLarge
                     )
-
-                    Text(text = details.instructions)
+                    Text(details.instructions)
                 }
 
-                RecipeLink(
-                    label = "Open recipe source",
-                    url = details.sourceUrl
-                )
-
-                RecipeLink(
-                    label = "Watch recipe video",
-                    url = details.youtubeUrl
-                )
+                RecipeLink("Open recipe source", details.sourceUrl)
+                RecipeLink("Watch recipe video", details.youtubeUrl)
             }
         }
     }
 }
 
 @Composable
-fun RecipeLink(
-    label: String,
-    url: String
-) {
+private fun DetailField(label: String, value: String) {
+    if (value.isNotBlank()) {
+        Text("$label: $value")
+    }
+}
+
+@Composable
+fun RecipeLink(label: String, url: String) {
     val context = LocalContext.current
-    val uri = runCatching { Uri.parse(url.trim()) }.getOrNull()
+    val uri = runCatching {
+        Uri.parse(url.trim())
+    }.getOrNull()
 
-    val isValid = uri != null &&
-            uri.scheme?.lowercase() in setOf("http", "https") &&
-            !uri.host.isNullOrBlank()
-
-    if (isValid && uri != null) {
+    if (
+        uri != null &&
+        uri.scheme?.lowercase() in setOf("http", "https") &&
+        !uri.host.isNullOrBlank()
+    ) {
         OutlinedButton(
             onClick = {
                 try {
@@ -174,7 +249,17 @@ fun RecipeLink(
                         Intent(Intent.ACTION_VIEW, uri)
                     )
                 } catch (exception: ActivityNotFoundException) {
-                    // No app is available to open this link.
+                    Toast.makeText(
+                        context,
+                        "No app is available to open this link.",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                } catch (exception: SecurityException) {
+                    Toast.makeText(
+                        context,
+                        "This link could not be opened.",
+                        Toast.LENGTH_SHORT
+                    ).show()
                 }
             },
             modifier = Modifier.fillMaxWidth()
