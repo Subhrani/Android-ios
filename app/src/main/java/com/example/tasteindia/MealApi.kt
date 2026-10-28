@@ -2,6 +2,8 @@ package com.example.tasteindia
 
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
+import okhttp3.OkHttpClient
+import java.util.concurrent.TimeUnit
 import retrofit2.Response
 import retrofit2.Retrofit
 import retrofit2.converter.moshi.MoshiConverterFactory
@@ -11,7 +13,7 @@ import retrofit2.http.Query
 data class MealDto(
     val idMeal: String,
     val strMeal: String,
-    val strMealThumb: String?
+    val strMealThumb: String? = null
 )
 
 data class MealsResponse(
@@ -69,7 +71,15 @@ object MealApiClient {
         .addLast(KotlinJsonAdapterFactory())
         .build()
 
+    val httpClient: OkHttpClient = OkHttpClient.Builder()
+        .connectTimeout(10, TimeUnit.SECONDS)
+        .readTimeout(15, TimeUnit.SECONDS)
+        .writeTimeout(15, TimeUnit.SECONDS)
+        .callTimeout(25, TimeUnit.SECONDS)
+        .build()
+
     val service: MealApi = Retrofit.Builder()
+        .client(httpClient)
         .baseUrl("https://www.themealdb.com/api/json/v1/1/")
         .addConverterFactory(MoshiConverterFactory.create(moshi))
         .build()

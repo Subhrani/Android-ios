@@ -63,6 +63,15 @@ fun MealDetailsRoute(
         else -> networkState
     }
 
+    val loaded = networkState as? MealDetailsUiState.Success
+    LaunchedEffect(savedMeal?.id, savedMeal?.details, loaded?.details) {
+        if (savedMeal != null && savedMeal.details == null && loaded != null &&
+            loaded.details.id == mealId && loaded.isSample == isSample &&
+            favouritesState.error == null) {
+            onSetFavourite(savedMeal.copy(details = loaded.details), true)
+        }
+    }
+
     MealDetailsScreen(
         uiState = displayState,
         isFavourite = savedMeal != null,
@@ -133,6 +142,12 @@ fun MealDetailsScreen(
                     style = MaterialTheme.typography.headlineMedium
                 )
 
+                RecipeImage(
+                    imageUrl = details.imageUrl,
+                    modifier = Modifier.fillMaxWidth(),
+                    hero = true
+                )
+
                 Button(
                     enabled = !favouritesState.isLoading &&
                             !favouritesState.isSaving,
@@ -188,6 +203,12 @@ fun MealDetailsScreen(
                 DetailField("Category", details.category)
                 DetailField("Area", details.area)
                 DetailField("Country", details.country)
+                DetailField("Creative Commons confirmed", details.creativeCommons)
+                DetailField("Last modified", details.dateModified)
+                details.additionalFields.forEach { (label, value) ->
+                    if (validWebUrl(value) != null) RecipeLink("Open $label", value)
+                    else DetailField(label, value)
+                }
 
                 if (details.tags.isNotEmpty()) {
                     Text("Tags: ${details.tags.joinToString(", ")}")
@@ -218,6 +239,10 @@ fun MealDetailsScreen(
 
                 RecipeLink("Open recipe source", details.sourceUrl)
                 RecipeLink("Watch recipe video", details.youtubeUrl)
+                RecipeLink("Open image source", details.imageSourceUrl)
+                if (details.imageSourceUrl.isNotBlank() && validWebUrl(details.imageSourceUrl) == null) {
+                    DetailField("Image credit", details.imageSourceUrl)
+                }
             }
         }
     }
@@ -233,13 +258,10 @@ private fun DetailField(label: String, value: String) {
 @Composable
 fun RecipeLink(label: String, url: String) {
     val context = LocalContext.current
-    val uri = runCatching {
-        Uri.parse(url.trim())
-    }.getOrNull()
+    val uri = validWebUrl(url)?.let(Uri::parse)
 
     if (
         uri != null &&
-        uri.scheme?.lowercase() in setOf("http", "https") &&
         !uri.host.isNullOrBlank()
     ) {
         OutlinedButton(

@@ -7,6 +7,8 @@ import androidx.datastore.preferences.preferencesDataStore
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.Types
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -15,13 +17,6 @@ private val Context.favouritesDataStore by preferencesDataStore(
     name = "tasteindia_favourites"
 )
 
-data class SavedMeal(
-    val id: String,
-    val name: String,
-    val imageUrl: String,
-    val isSample: Boolean,
-    val details: MealDetails? = null
-)
 
 interface FavouritesStore {
     val favourites: Flow<List<SavedMeal>>
@@ -56,24 +51,13 @@ class DataStoreFavouritesStore(
     override val favourites: Flow<List<SavedMeal>> =
         dataStore.data.map { preferences ->
             decode(preferences[favouritesKey])
-        }
+        }.flowOn(Dispatchers.IO)
 
     override suspend fun save(meal: SavedMeal) {
         dataStore.edit { preferences ->
             val current = decode(preferences[favouritesKey])
 
-            val existing = current.firstOrNull {
-                it.id == meal.id && it.isSample == meal.isSample
-            }
-
-            // Preserve cached details if the list screen saves only a summary.
-            val updatedMeal = meal.copy(
-                details = meal.details ?: existing?.details
-            )
-
-            val updated = current.filterNot {
-                it.id == meal.id && it.isSample == meal.isSample
-            } + updatedMeal
+            val updated = mergeFavourite(current, meal)
 
             preferences[favouritesKey] = adapter.toJson(updated)
         }
@@ -86,9 +70,7 @@ class DataStoreFavouritesStore(
         dataStore.edit { preferences ->
             val current = decode(preferences[favouritesKey])
 
-            val updated = current.filterNot {
-                it.id == mealId && it.isSample == isSample
-            }
+            val updated = removeFavourite(current, mealId, isSample)
 
             preferences[favouritesKey] = adapter.toJson(updated)
         }

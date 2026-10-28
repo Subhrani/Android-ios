@@ -17,7 +17,11 @@ data class MealDetails(
     val instructions: String,
     val tags: List<String>,
     val sourceUrl: String,
-    val youtubeUrl: String
+    val youtubeUrl: String,
+    val imageSourceUrl: String = "",
+    val creativeCommons: String = "",
+    val dateModified: String = "",
+    val additionalFields: Map<String, String> = emptyMap()
 )
 
 fun mapMealDetails(fields: Map<String, Any?>): MealDetails {
@@ -44,6 +48,11 @@ fun mapMealDetails(fields: Map<String, Any?>): MealDetails {
         .map { it.trim() }
         .filter { it.isNotEmpty() }
 
+    val mapped = setOf("idMeal", "strMeal", "strMealThumb", "strCategory", "strArea",
+        "strCountry", "strMealAlternate", "strInstructions", "strTags", "strSource", "strYoutube",
+        "strImageSource", "strCreativeCommonsConfirmed", "dateModified") +
+        (1..20).flatMap { listOf("strIngredient$it", "strMeasure$it") }
+
     return MealDetails(
         id = text("idMeal"),
         name = text("strMeal"),
@@ -56,6 +65,18 @@ fun mapMealDetails(fields: Map<String, Any?>): MealDetails {
         instructions = text("strInstructions"),
         tags = tags,
         sourceUrl = text("strSource"),
-        youtubeUrl = text("strYoutube")
+        youtubeUrl = text("strYoutube"),
+        imageSourceUrl = text("strImageSource"),
+        creativeCommons = text("strCreativeCommonsConfirmed"),
+        dateModified = text("dateModified"),
+        additionalFields = fields.filterKeys { it !in mapped }.mapNotNull { (key, value) ->
+            if (value !is String && value !is Number && value !is Boolean) return@mapNotNull null
+            val content = value.toString().trim()
+            if (content.isBlank()) return@mapNotNull null
+            val label = key.removePrefix("str").removePrefix("id")
+                .replace(Regex("([a-z])([A-Z])"), "$1 $2")
+                .replaceFirstChar { it.uppercaseChar() }
+            label to content
+        }.toMap()
     )
 }

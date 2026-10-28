@@ -7,6 +7,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -37,18 +38,12 @@ class FavouritesViewModel(
         viewModelScope.launch {
             try {
                 store.favourites.collect { meals ->
-                    _uiState.value = _uiState.value.copy(
-                        meals = meals,
-                        isLoading = false
-                    )
+                    _uiState.update { it.copy(meals = meals, isLoading = false) }
                 }
             } catch (exception: CancellationException) {
                 throw exception
             } catch (exception: Exception) {
-                _uiState.value = _uiState.value.copy(
-                    isLoading = false,
-                    error = "Could not read saved favourites."
-                )
+                _uiState.update { it.copy(isLoading = false, error = "Could not read saved favourites.") }
             }
         }
     }
@@ -59,10 +54,7 @@ class FavouritesViewModel(
     ) {
         viewModelScope.launch {
             writeMutex.withLock {
-                _uiState.value = _uiState.value.copy(
-                    isSaving = true,
-                    error = null
-                )
+                _uiState.update { it.copy(isSaving = true, error = null) }
 
                 try {
                     if (shouldSave) {
@@ -76,20 +68,16 @@ class FavouritesViewModel(
                 } catch (exception: CancellationException) {
                     throw exception
                 } catch (exception: Exception) {
-                    _uiState.value = _uiState.value.copy(
-                        error = "Could not update favourites. Please try again."
-                    )
+                    _uiState.update { it.copy(error = "Could not update favourites. Please try again.") }
                 } finally {
-                    _uiState.value = _uiState.value.copy(
-                        isSaving = false
-                    )
+                    _uiState.update { it.copy(isSaving = false) }
                 }
             }
         }
     }
 
     fun dismissError() {
-        _uiState.value = _uiState.value.copy(error = null)
+        _uiState.update { it.copy(error = null) }
     }
 }
 

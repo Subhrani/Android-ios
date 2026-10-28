@@ -75,16 +75,13 @@ fun FavouritesScreen(
                                 .fillMaxWidth()
                                 .padding(vertical = 8.dp)
                         ) {
-                            Text(
-                                text = meal.name,
-                                style = MaterialTheme.typography.titleMedium,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        onOpenMeal(meal.id, meal.isSample)
-                                    }
-                                    .padding(vertical = 12.dp)
-                            )
+                            Column(Modifier.fillMaxWidth().clickable {
+                                onOpenMeal(meal.id, meal.isSample)
+                            }) {
+                                RecipeImage(meal.imageUrl, Modifier.fillMaxWidth())
+                                Text(meal.name, style = MaterialTheme.typography.titleMedium,
+                                    modifier = Modifier.padding(vertical = 12.dp))
+                            }
 
                             if (meal.isSample) {
                                 Text(
@@ -93,6 +90,11 @@ fun FavouritesScreen(
                                 )
                             }
 
+                            Text(
+                                text = if (meal.details != null) "Details saved for offline use"
+                                    else "Open recipe while online to save its details",
+                                style = MaterialTheme.typography.labelMedium
+                            )
                             OutlinedButton(
                                 onClick = { onRemove(meal) },
                                 enabled = !state.isSaving

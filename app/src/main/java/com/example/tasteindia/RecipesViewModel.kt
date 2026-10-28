@@ -1,33 +1,26 @@
 package com.example.tasteindia
 
 import android.content.Context
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.Companion.APPLICATION_KEY
+import androidx.lifecycle.createSavedStateHandle
 import androidx.lifecycle.viewModelScope
-import com.squareup.moshi.Moshi
-import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
-import java.io.IOException
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 sealed interface RecipesUiState {
     data object Loading : RecipesUiState
-
-    data class Success(
-        val meals: List<Meal>,
-        val isSample: Boolean = false
-    ) : RecipesUiState
-
+    data class Success(val meals: List<Meal>, val isSample: Boolean = false) : RecipesUiState
     data object Empty : RecipesUiState
-
-    data class Error(
-        val message: String
-    ) : RecipesUiState
+    data class Error(val message: String) : RecipesUiState
 }
 
 data class RecipeFilterState(
@@ -47,259 +40,112 @@ data class FilterChoices(
 )
 
 class RecipesViewModel(
-    private val api: MealApi = MealApiClient.service
+    private val repository: MealRepository = AppRepositories.meals,
+    private val samples: SampleSource? = null,
+    private val savedState: SavedStateHandle = SavedStateHandle()
 ) : ViewModel() {
-
-    private val repository = MealRepository(api)
-
-    private val _uiState =
-        MutableStateFlow<RecipesUiState>(RecipesUiState.Loading)
-
+    private val _uiState = MutableStateFlow<RecipesUiState>(RecipesUiState.Loading)
     val uiState: StateFlow<RecipesUiState> = _uiState.asStateFlow()
-
-    private val _searchQuery = MutableStateFlow("")
-
-    val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
-
-    private val _ascending = MutableStateFlow(true)
-
-    val ascending: StateFlow<Boolean> = _ascending.asStateFlow()
-
-    private val _filters = MutableStateFlow(RecipeFilterState())
-
+    val searchQuery: StateFlow<String> = savedState.getStateFlow("query", "")
+    val ascending: StateFlow<Boolean> = savedState.getStateFlow("ascending", true)
+    private val _filters = MutableStateFlow(RecipeFilterState(
+        category = savedState["category"], ingredient = savedState["ingredient"],
+        categoryIds = savedState.get<ArrayList<String>>("categoryIds")?.toSet(),
+        ingredientIds = savedState.get<ArrayList<String>>("ingredientIds")?.toSet()
+    ))
     val filters: StateFlow<RecipeFilterState> = _filters.asStateFlow()
-
     private val _filterChoices = MutableStateFlow(FilterChoices())
-
-    val filterChoices: StateFlow<FilterChoices> =
-        _filterChoices.asStateFlow()
-
+    val filterChoices: StateFlow<FilterChoices> = _filterChoices.asStateFlow()
     private var loadJob: Job? = null
     private var filterJob: Job? = null
     private var choicesJob: Job? = null
+    private var loadRevision = 0
+    private var filterRevision = 0
 
-    init {
-        loadRecipes()
-    }
+    init { load(savedState["sample"] ?: false, samples) }
 
-    fun updateSearchQuery(query: String) {
-        _searchQuery.value = query
-    }
+    fun updateSearchQuery(query: String) { savedState["query"] = query }
+    fun setAscending(value: Boolean) { savedState["ascending"] = value }
+    fun loadRecipes() = load(false, samples, forceRefresh = true)
+    fun loadSampleRecipes(context: Context) = load(true, samples ?: AssetSampleSource(context))
 
-    fun setAscending(value: Boolean) {
-        _ascending.value = value
-    }
-
-    // Load the live Indian meal list from TheMealDB.
-    fun loadRecipes() {
+    private fun load(sample: Boolean, source: SampleSource?, forceRefresh: Boolean = false) {
         loadJob?.cancel()
         filterJob?.cancel()
         choicesJob?.cancel()
-
-        _filters.value = RecipeFilterState()
+        filterRevision++
+        val revision = ++loadRevision
+        if (sample != (savedState["sample"] ?: false)) clearFilters()
+        savedState["sample"] = sample
+        _filters.value = _filters.value.copy(isLoading = false, error = null)
         _filterChoices.value = FilterChoices()
-
         loadJob = viewModelScope.launch {
             _uiState.value = RecipesUiState.Loading
-
             try {
-                val response = api.getMealsByArea("Indian")
-
-                if (!response.isSuccessful) {
-                    _uiState.value = RecipesUiState.Error(
-                        "The recipe service returned an error. Please try again."
-                    )
-                    return@launch
+                val meals = if (sample) requireNotNull(source).meals() else repository.getIndianMeals(forceRefresh)
+                ensureActive()
+                if (revision == loadRevision) {
+                    _uiState.value = if (meals.isEmpty()) RecipesUiState.Empty
+                        else RecipesUiState.Success(meals, sample)
                 }
-
-                val body = response.body()
-
-                if (body == null) {
-                    _uiState.value = RecipesUiState.Error(
-                        "The recipe service returned an empty response. Please try again."
-                    )
-                    return@launch
-                }
-
-                val meals = body.meals.orEmpty().map { mealDto ->
-                    Meal(
-                        id = mealDto.idMeal,
-                        name = mealDto.strMeal,
-                        imageUrl = mealDto.strMealThumb.orEmpty()
-                    )
-                }
-
-                _uiState.value = if (meals.isEmpty()) {
-                    RecipesUiState.Empty
-                } else {
-                    RecipesUiState.Success(meals)
-                }
-            } catch (exception: CancellationException) {
-                throw exception
-            } catch (exception: IOException) {
-                _uiState.value = RecipesUiState.Error(
-                    "Could not connect. Check your internet and try again."
-                )
-            } catch (exception: Exception) {
-                _uiState.value = RecipesUiState.Error(
-                    "Could not load recipes. Please try again."
+            } catch (e: CancellationException) { throw e
+            } catch (e: Exception) {
+                if (revision == loadRevision) _uiState.value = RecipesUiState.Error(
+                    if (sample) "Could not load the bundled sample data." else recipeError(e)
                 )
             }
         }
     }
 
-    // Load the saved sample JSON for offline review.
-    fun loadSampleRecipes(context: Context) {
-        val appContext = context.applicationContext
-
-        loadJob?.cancel()
-        filterJob?.cancel()
-        choicesJob?.cancel()
-
-        _filters.value = RecipeFilterState()
-        _filterChoices.value = FilterChoices()
-
-        loadJob = viewModelScope.launch {
-            _uiState.value = RecipesUiState.Loading
-
-            try {
-                val meals = withContext(Dispatchers.IO) {
-                    val json = appContext.assets
-                        .open("indian_meals.json")
-                        .bufferedReader()
-                        .use { it.readText() }
-
-                    val moshi = Moshi.Builder()
-                        .addLast(KotlinJsonAdapterFactory())
-                        .build()
-
-                    val response = requireNotNull(
-                        moshi.adapter(MealsResponse::class.java)
-                            .fromJson(json)
-                    )
-
-                    response.meals.orEmpty().map { mealDto ->
-                        Meal(
-                            id = mealDto.idMeal,
-                            name = mealDto.strMeal,
-                            imageUrl = mealDto.strMealThumb.orEmpty()
-                        )
-                    }
-                }
-
-                _uiState.value = RecipesUiState.Success(
-                    meals = meals,
-                    isSample = true
-                )
-            } catch (exception: CancellationException) {
-                throw exception
-            } catch (exception: Exception) {
-                _uiState.value = RecipesUiState.Error(
-                    "Could not load the sample data."
-                )
-            }
-        }
-    }
-
-    // Load names that can be displayed in the filter controls.
     fun loadFilterChoices() {
-        val currentList =
-            _uiState.value as? RecipesUiState.Success ?: return
-
+        val current = _uiState.value as? RecipesUiState.Success ?: return
+        if (_filterChoices.value.categories.isNotEmpty()) return
         choicesJob?.cancel()
-
-        if (currentList.isSample) {
-            _filterChoices.value = FilterChoices(
-                categories = SampleFilters.categories,
-                ingredients = SampleFilters.ingredients
-            )
+        if (current.isSample) {
+            _filterChoices.value = FilterChoices(SampleFilters.categories, SampleFilters.ingredients)
             return
         }
-
+        val revision = loadRevision
         choicesJob = viewModelScope.launch {
             _filterChoices.value = FilterChoices(isLoading = true)
-
             try {
                 val categories = repository.getCategoryNames()
                 val ingredients = repository.getIngredientNames()
-
-                _filterChoices.value = FilterChoices(
-                    categories = categories,
-                    ingredients = ingredients
-                )
-            } catch (exception: CancellationException) {
-                throw exception
-            } catch (exception: Exception) {
-                _filterChoices.value = FilterChoices(
-                    error = "Could not load filter choices. Please try again."
-                )
+                ensureActive()
+                if (revision == loadRevision) _filterChoices.value = FilterChoices(categories, ingredients)
+            } catch (e: CancellationException) { throw e
+            } catch (e: Exception) {
+                if (revision == loadRevision) _filterChoices.value = FilterChoices(error = recipeError(e))
             }
         }
     }
 
-    // Find IDs matching the selected category and ingredient.
     fun applyFilters(category: String?, ingredient: String?) {
-        val currentList =
-            _uiState.value as? RecipesUiState.Success ?: return
-
-        val selectedCategory = category
-            ?.trim()
-            ?.takeIf { it.isNotEmpty() }
-
-        val selectedIngredient = ingredient
-            ?.trim()
-            ?.takeIf { it.isNotEmpty() }
-
+        val current = _uiState.value as? RecipesUiState.Success ?: return
+        val selectedCategory = category?.trim()?.takeIf { it.isNotEmpty() }
+        val selectedIngredient = ingredient?.trim()?.takeIf { it.isNotEmpty() }
         filterJob?.cancel()
-
-        // Sample mode uses the invented IDs in SampleFilters.
-        if (currentList.isSample) {
-            _filters.value = RecipeFilterState(
-                category = selectedCategory,
-                ingredient = selectedIngredient,
-                categoryIds = selectedCategory?.let {
-                    SampleFilters.categoryIds(it)
-                },
-                ingredientIds = selectedIngredient?.let {
-                    SampleFilters.ingredientIds(it)
-                }
-            )
-            return
-        }
-
-        // Live mode requests matching IDs from TheMealDB.
+        val revision = ++filterRevision
+        if (selectedCategory == null && selectedIngredient == null) { clearFilters(); return }
         filterJob = viewModelScope.launch {
-            _filters.value = _filters.value.copy(
-                isLoading = true,
-                error = null
-            )
-
+            _filters.value = _filters.value.copy(isLoading = true, error = null)
             try {
                 val categoryIds = selectedCategory?.let {
-                    repository.getCategoryMealIds(it)
+                    if (current.isSample) SampleFilters.categoryIds(it) else repository.getCategoryMealIds(it)
                 }
-
                 val ingredientIds = selectedIngredient?.let {
-                    repository.getIngredientMealIds(it)
+                    if (current.isSample) SampleFilters.ingredientIds(it) else repository.getIngredientMealIds(it)
                 }
-
-                _filters.value = RecipeFilterState(
-                    category = selectedCategory,
-                    ingredient = selectedIngredient,
-                    categoryIds = categoryIds,
-                    ingredientIds = ingredientIds
-                )
-            } catch (exception: CancellationException) {
-                throw exception
-            } catch (exception: IOException) {
-                _filters.value = _filters.value.copy(
-                    isLoading = false,
-                    error = "Could not apply filters. Check your connection and try again."
-                )
-            } catch (exception: Exception) {
-                _filters.value = _filters.value.copy(
-                    isLoading = false,
-                    error = "Could not apply filters. Please try again."
+                ensureActive()
+                if (revision == filterRevision) {
+                    val state = RecipeFilterState(selectedCategory, selectedIngredient, categoryIds, ingredientIds)
+                    _filters.value = state
+                    saveFilters(state)
+                }
+            } catch (e: CancellationException) { throw e
+            } catch (e: Exception) {
+                if (revision == filterRevision) _filters.value = _filters.value.copy(
+                    isLoading = false, error = recipeError(e)
                 )
             }
         }
@@ -307,6 +153,26 @@ class RecipesViewModel(
 
     fun clearFilters() {
         filterJob?.cancel()
+        filterRevision++
         _filters.value = RecipeFilterState()
+        saveFilters(_filters.value)
+    }
+
+    private fun saveFilters(state: RecipeFilterState) {
+        savedState["category"] = state.category
+        savedState["ingredient"] = state.ingredient
+        savedState["categoryIds"] = state.categoryIds?.let { ArrayList(it) }
+        savedState["ingredientIds"] = state.ingredientIds?.let { ArrayList(it) }
+    }
+
+    companion object {
+        val Factory = viewModelFactory {
+            initializer {
+                RecipesViewModel(
+                    samples = AssetSampleSource(checkNotNull(this[APPLICATION_KEY])),
+                    savedState = createSavedStateHandle()
+                )
+            }
+        }
     }
 }
