@@ -159,3 +159,7 @@ Live recipe content and live image URLs: [TheMealDB](https://www.themealdb.com/)
 ChatGPT assisted with implementation drafts, architecture suggestions, debugging, test ideas, documentation and this bulk update. The candidate must review and adapt the code, run the Android checks, understand the tradeoffs and be able to explain and modify the submission. Do not claim unreviewed generated work as independently completed.
 
 Author: Gopika Arumugam
+
+## Bundled sample images
+
+The two known sample recipes now show bundled, AI-generated illustrative food images offline in the list, details and saved favourites. Each is visibly labelled "AI-generated sample image". See IMAGE-CREDITS.md for attribution and generation prompts. The fixture JSON still contains missing/invalid URLs for tests; these two explicit sample IDs use local resources at runtime instead of those URLs. Live recipes continue to use TheMealDB's strMealThumb, with missing/error placeholders when needed. This supersedes the earlier description of placeholder images in runtime sample mode. No API data or saved favourites need to be changed.

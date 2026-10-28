@@ -272,6 +272,7 @@ fun RecipesScreen(
                     RecipeRow(
                         meal = meal,
                         isFavourite = isSaved,
+                        isSample = uiState.isSample,
                         canSave = !favouritesState.isLoading && !favouritesState.isSaving,
                         onOpen = { onOpenMeal(meal.id, uiState.isSample) },
                         onToggleFavourite = {

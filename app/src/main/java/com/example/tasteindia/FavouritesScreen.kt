@@ -78,7 +78,11 @@ fun FavouritesScreen(
                             Column(Modifier.fillMaxWidth().clickable {
                                 onOpenMeal(meal.id, meal.isSample)
                             }) {
-                                RecipeImage(meal.imageUrl, Modifier.fillMaxWidth())
+                                RecipeImage(
+                                    imageUrl = meal.imageUrl,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    sampleMealId = if (meal.isSample) meal.id else null
+                                )
                                 Text(meal.name, style = MaterialTheme.typography.titleMedium,
                                     modifier = Modifier.padding(vertical = 12.dp))
                             }

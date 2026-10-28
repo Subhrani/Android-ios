@@ -145,7 +145,8 @@ fun MealDetailsScreen(
                 RecipeImage(
                     imageUrl = details.imageUrl,
                     modifier = Modifier.fillMaxWidth(),
-                    hero = true
+                    hero = true,
+                    sampleMealId = if (uiState.isSample) details.id else null
                 )
 
                 Button(

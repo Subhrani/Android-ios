@@ -18,13 +18,18 @@ fun RecipeRow(
     isFavourite: Boolean,
     canSave: Boolean,
     onOpen: () -> Unit,
-    onToggleFavourite: () -> Unit
+    onToggleFavourite: () -> Unit,
+    isSample: Boolean = false
 ) {
     Column(Modifier.fillMaxWidth().padding(16.dp)) {
         Column(Modifier.fillMaxWidth().clickable(
             role = Role.Button, onClickLabel = "Open recipe details", onClick = onOpen
         )) {
-            RecipeImage(meal.imageUrl, Modifier.fillMaxWidth())
+            RecipeImage(
+                imageUrl = meal.imageUrl,
+                modifier = Modifier.fillMaxWidth(),
+                sampleMealId = if (isSample) meal.id else null
+            )
             Text(meal.name, style = MaterialTheme.typography.titleMedium,
                 modifier = Modifier.padding(vertical = 12.dp))
         }

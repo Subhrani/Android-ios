@@ -33,13 +33,25 @@ private object RecipeImages {
 
 /** Coil owns image IO and caching; rows never request meal details. */
 @Composable
-fun RecipeImage(imageUrl: String, modifier: Modifier = Modifier, hero: Boolean = false) {
-    var loading by remember(imageUrl) { mutableStateOf(imageUrl.isNotBlank()) }
-    var failed by remember(imageUrl) { mutableStateOf(imageUrl.isBlank()) }
+fun RecipeImage(
+    imageUrl: String,
+    modifier: Modifier = Modifier,
+    hero: Boolean = false,
+    sampleMealId: String? = null
+) {
+    // Use bundled images only for explicitly labelled sample records.
+    // Looking up the ID at render time also fixes favourites saved before this update.
+    val sampleImage = when (sampleMealId) {
+        "test-1" -> R.drawable.sample_biryani
+        "test-2" -> R.drawable.sample_chana_masala
+        else -> null
+    }
+    var loading by remember(imageUrl, sampleImage) { mutableStateOf(sampleImage != null || imageUrl.isNotBlank()) }
+    var failed by remember(imageUrl, sampleImage) { mutableStateOf(sampleImage == null && imageUrl.isBlank()) }
     val context = LocalContext.current
     val imageLoader = remember(context) { RecipeImages.loader(context) }
-    val request = remember(context, imageUrl) {
-        ImageRequest.Builder(context).data(imageUrl.takeIf { it.isNotBlank() })
+    val request = remember(context, imageUrl, sampleImage) {
+        ImageRequest.Builder(context).data(sampleImage ?: imageUrl.takeIf { it.isNotBlank() })
             .crossfade(true).build()
     }
     Box(
@@ -60,6 +72,16 @@ fun RecipeImage(imageUrl: String, modifier: Modifier = Modifier, hero: Boolean =
             onError = { loading = false; failed = true }
         )
         if (loading) CircularProgressIndicator()
+        if (sampleImage != null && !failed) {
+            Text(
+                text = "AI-generated sample image",
+                modifier = Modifier.align(Alignment.BottomStart)
+                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.9f))
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
         if (failed) Text(
             text = if (imageUrl.isBlank()) "No recipe photograph" else "Recipe photograph unavailable",
             modifier = Modifier.padding(16.dp),
